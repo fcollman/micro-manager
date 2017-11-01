@@ -605,16 +605,16 @@ bool XYStage::Busy()
    // query the device
    int ret = QueryCommand(command, answer);
    if (ret != DEVICE_OK)
-      return false;
+      return true;
 
    if (answer.length() >= 1)
    {
 	  if (answer.substr(0,1) == "B") return true;
 	  else if (answer.substr(0,1) == "N") return false;
-	  else return false;
+	  else return true;
    }
 
-   return false;
+   return true;
 }
 
 

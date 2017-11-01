@@ -227,6 +227,16 @@ int LeicaScopeInterface::Initialize(MM::Device& device, MM::Core& core)
       command.str("");
    }
 
+   // Suppress event reporting for Fast Filter Wheel
+   if (scopeModel_->IsDeviceAvailable(g_Fast_Filter_Wheel)) {
+      command << g_Fast_Filter_Wheel << "003 0 0";
+      ret = GetAnswer(device, core, command.str().c_str(), answer);
+      if (ret != DEVICE_OK)
+         return ret;
+      command.str("");
+   }
+
+
    CDeviceUtils::SleepMs(100);
 
    if (scopeModel_->IsDeviceAvailable(g_Lamp)) {
@@ -460,6 +470,14 @@ int LeicaScopeInterface::Initialize(MM::Device& device, MM::Core& core)
       command.str("");
    }
 
+   // Start event reporting for Fast Filter Wheel
+   if (scopeModel_->IsDeviceAvailable(g_Fast_Filter_Wheel)) {
+      command << g_Fast_Filter_Wheel << "003 1 0";
+      ret = GetAnswer(device, core, command.str().c_str(), answer);
+      if (ret != DEVICE_OK)
+         return ret;
+      command.str("");
+   }
 
 
    // Start monitoring of all messages coming from the microscope
@@ -2081,11 +2099,22 @@ int LeicaScopeInterface::SetAFCMode(MM::Device &device, MM::Core &core, bool on)
 int LeicaScopeInterface::SetAFCOffset(MM::Device &device, MM::Core &core, double offset)
 {
    std::stringstream os;
+   if (offset==-1){
+	    scopeModel_->afc_.SetBusy(true);
+	    os << g_AFC << "022";
+	int ret = core.SetSerialCommand(&device, port_.c_str(), os.str().c_str(), "\r");
+	if(ret != DEVICE_OK)
+		return ret;	
+	return DEVICE_OK;
+   }
+   else{
+
    os << g_AFC << "024" << " " << offset;
 	int ret = core.SetSerialCommand(&device, port_.c_str(), os.str().c_str(), "\r");
 	if(ret != DEVICE_OK)
 		return ret;	
 	return DEVICE_OK;
+   }
 }
 
 /**
@@ -2372,18 +2401,22 @@ int LeicaMonitoringThread::svc()
                    break;
                case (g_Fast_Filter_Wheel) :
                   {
-                   int filterID_raw;
-                   os >> filterID_raw;
-                   int filterID = filterID_raw - 1;
+                   
                    switch (commandId) {
                       case (22) : // Position set response
-                         {
-                            int pos;
-                            os >> pos;
-                            scopeModel_->FastFilterWheel_[filterID].SetPosition(pos);
-                            scopeModel_->FastFilterWheel_[filterID].SetBusy(false);
-                         }
+						 scopeModel_->FastFilterWheel_[0].SetBusy(false);
                          break;
+					  case (23) : // Position get response
+						  {
+							  int filterID_raw;
+			                  os >> filterID_raw;
+						      int filterID = filterID_raw - 1;
+							  int pos;
+							  os >> pos;
+							  scopeModel_->FastFilterWheel_[filterID].SetBusy(false);
+                              scopeModel_->FastFilterWheel_[filterID].SetPosition(pos);
+						  }
+
                    }
                   }
                    break;
@@ -2786,6 +2819,9 @@ int LeicaMonitoringThread::svc()
                         scopeModel_->afc_.SetBusy(false);
                         break;
                      }
+					 case (22) :  //set AFC offset to here
+						scopeModel_->afc_.SetBusy(false);
+                        break;
                      case (23) : // Current edge position value
                      {
                         double edgeposition;
